@@ -2,6 +2,15 @@
    YTFetch — Frontend Logic
    ============================================================= */
 
+// Global error handlers to display JS errors as UI toast notifications
+window.addEventListener("error", (event) => {
+  showToast(`JS Error: ${event.message} at ${event.filename.split('/').pop()}:${event.lineno}`, "error");
+});
+window.addEventListener("unhandledrejection", (event) => {
+  showToast(`Promise Error: ${event.reason}`, "error");
+});
+
+
 // ── State ──────────────────────────────────────────────────
 let allVideos = [];          // [{id, title, url, duration, thumbnail, channel, view_count}]
 let selectedIds = new Set();
