@@ -157,7 +157,7 @@ def get_format_string(quality, fmt):
     'ffmpeg not installed' error — these top out around 720p on YouTube.
     """
     if fmt == "mp3":
-        return "bestaudio"
+        return "bestaudio/best"
 
     if HAS_FFMPEG:
         # Full quality — separate video+audio merged by ffmpeg
@@ -215,6 +215,10 @@ def get_base_ydl_opts(video_id, output_dir, format_str, player_client="tv_embedd
         "fragment_retries": 5,
         "retry_sleep_functions": {"http": lambda n: 2 ** n},
         "socket_timeout": 30,
+        "js_runtimes": {
+            "node": {}
+        },
+        "remote_components": ["ejs:github"],
     }
 
     if HAS_FFMPEG:
@@ -297,6 +301,7 @@ def download_video_worker(video_id, url, quality, fmt, output_dir, cookies_sourc
             break
 
     # All attempts failed
+    print(f"[Worker] Download failed for {video_id}. Error: {last_error}")
     with download_lock:
         if video_id in download_progress:
             download_progress[video_id]["status"] = "error"
@@ -328,6 +333,10 @@ def fetch_playlist():
         "no_warnings": True,
         "extract_flat": "in_playlist",
         "skip_download": True,
+        "js_runtimes": {
+            "node": {}
+        },
+        "remote_components": ["ejs:github"],
     }
 
     try:
@@ -580,6 +589,15 @@ def system_info():
         "ffmpeg_path": FFMPEG_PATH,
         "platform": sys.platform,
     })
+
+
+@app.after_request
+def add_header(r):
+    """Add headers to prevent caching of static files."""
+    r.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    r.headers["Pragma"] = "no-cache"
+    r.headers["Expires"] = "0"
+    return r
 
 
 if __name__ == "__main__":
