@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+*.mp3
+*.mp4
+*.m4a
+*.webm
+*.mkv
+downloads/

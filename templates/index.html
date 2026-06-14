@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YT Playlist Downloader</title>
+  <meta name="description" content="Download YouTube playlists and videos with quality selection, format options, and real-time progress tracking." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <!-- Animated background orbs -->
+  <div class="bg-orbs">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+  </div>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="logo">
+      <div class="logo-icon">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" fill="url(#logoGrad)"/>
+          <defs>
+            <linearGradient id="logoGrad" x1="2" y1="2" x2="22" y2="22">
+              <stop offset="0%" stop-color="#a78bfa"/>
+              <stop offset="100%" stop-color="#ec4899"/>
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+      <div>
+        <span class="logo-text">YT<span class="logo-accent">Fetch</span></span>
+        <span class="logo-sub">Playlist Downloader</span>
+      </div>
+    </div>
+    <div class="header-stats" id="headerStats" style="display:none">
+      <div class="stat-pill" id="statTotal">
+        <span class="stat-icon">🎬</span>
+        <span id="statTotalNum">0</span> videos
+      </div>
+      <div class="stat-pill" id="statDone">
+        <span class="stat-icon">✅</span>
+        <span id="statDoneNum">0</span> done
+      </div>
+    </div>
+  </header>
+
+  <main class="main">
+
+    <!-- ffmpeg warning banner (shown/hidden by JS) -->
+    <div id="ffmpegBanner" class="ffmpeg-banner" style="display:none">
+      <div class="ffmpeg-banner-icon">⚠️</div>
+      <div class="ffmpeg-banner-body">
+        <strong>ffmpeg not found</strong> — Downloads will work but quality is limited to ~720p.
+        4K &amp; 1080p require ffmpeg to merge separate video+audio streams.
+        <a href="https://www.gyan.dev/ffmpeg/builds/" target="_blank" rel="noopener" class="ffmpeg-link">Download ffmpeg →</a>
+        <span class="ffmpeg-hint">After installing, restart the app.</span>
+      </div>
+      <button class="ffmpeg-dismiss" onclick="this.parentElement.style.display='none'">✕</button>
+    </div>
+
+    <!-- URL Input Section -->
+    <section class="card url-section">
+      <h2 class="section-title">
+        <span class="section-icon">🔗</span>
+        Paste YouTube URL
+      </h2>
+      <p class="section-desc">Works with playlists, channels, and single videos</p>
+      <div class="url-input-row">
+        <div class="url-input-wrap">
+          <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <input
+            id="urlInput"
+            type="text"
+            placeholder="https://www.youtube.com/playlist?list=..."
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button id="clearUrlBtn" class="clear-btn" title="Clear" style="display:none">✕</button>
+        </div>
+        <button id="fetchBtn" class="btn btn-primary" onclick="fetchPlaylist()">
+          <span class="btn-icon">🔍</span>
+          <span>Fetch</span>
+        </button>
+      </div>
+      <div id="fetchError" class="error-banner" style="display:none"></div>
+    </section>
+
+    <!-- Settings Panel -->
+    <section class="card settings-section" id="settingsSection" style="display:none">
+      <h2 class="section-title">
+        <span class="section-icon">⚙️</span>
+        Download Settings
+      </h2>
+      <div class="settings-grid">
+
+        <!-- Quality -->
+        <div class="setting-group">
+          <label class="setting-label">Video Quality</label>
+          <div class="quality-pills" id="qualityPills">
+            <button class="quality-pill" data-quality="best" onclick="selectQuality(this)">🏆 Best</button>
+            <button class="quality-pill ffmpeg-req" data-quality="4k" onclick="selectQuality(this)" title="Requires ffmpeg">4K</button>
+            <button class="quality-pill ffmpeg-req active" data-quality="1080p" onclick="selectQuality(this)" title="Requires ffmpeg">1080p</button>
+            <button class="quality-pill" data-quality="720p" onclick="selectQuality(this)">720p</button>
+            <button class="quality-pill" data-quality="480p" onclick="selectQuality(this)">480p</button>
+            <button class="quality-pill" data-quality="360p" onclick="selectQuality(this)">360p</button>
+          </div>
+        </div>
+
+        <!-- Format -->
+        <div class="setting-group">
+          <label class="setting-label">Format</label>
+          <div class="format-pills" id="formatPills">
+            <button class="format-pill active" data-format="mp4" onclick="selectFormat(this)">
+              <span>🎬</span> MP4 Video
+            </button>
+            <button class="format-pill" data-format="mp3" onclick="selectFormat(this)">
+              <span>🎵</span> MP3 Audio
+            </button>
+          </div>
+        </div>
+
+        <!-- Output Folder -->
+        <div class="setting-group full-width">
+          <label class="setting-label">Download Folder</label>
+          <div class="folder-row">
+            <div class="folder-display" id="folderDisplay">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+              <span id="folderPath">Loading...</span>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="browseFolder()">
+              📂 Browse
+            </button>
+            <button class="btn btn-ghost btn-sm" onclick="openFolder()" title="Open folder in Explorer">
+              🗂️ Open
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Concurrent downloads -->
+      <div class="concurrent-row">
+        <label class="setting-label">Concurrent Downloads</label>
+        <div class="concurrent-control">
+          <button class="stepper-btn" onclick="changeConcurrent(-1)">−</button>
+          <span id="concurrentVal">3</span>
+          <button class="stepper-btn" onclick="changeConcurrent(1)">+</button>
+        </div>
+        <span class="setting-hint">videos at the same time</span>
+      </div>
+    </section>
+
+    <!-- Playlist Preview -->
+    <section class="card playlist-section" id="playlistSection" style="display:none">
+      <div class="playlist-header">
+        <div>
+          <h2 class="section-title" id="playlistTitle">
+            <span class="section-icon">📋</span>
+            Playlist
+          </h2>
+          <p class="playlist-meta" id="playlistMeta"></p>
+        </div>
+        <div class="playlist-actions">
+          <button class="btn btn-ghost btn-sm" onclick="selectAll()">✅ Select All</button>
+          <button class="btn btn-ghost btn-sm" onclick="selectNone()">☐ Deselect All</button>
+          <button class="btn btn-primary" id="downloadBtn" onclick="startDownload()" disabled>
+            <span class="btn-icon">⬇️</span>
+            <span id="downloadBtnText">Download Selected</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Search/Filter -->
+      <div class="search-row">
+        <div class="search-wrap">
+          <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2"/>
+            <path d="m21 21-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <input id="searchInput" type="text" placeholder="Filter videos..." oninput="filterVideos()" />
+        </div>
+        <span id="selectionCount" class="selection-count">0 selected</span>
+      </div>
+
+      <!-- Video Grid -->
+      <div class="video-grid" id="videoGrid"></div>
+    </section>
+
+    <!-- Download Queue -->
+    <section class="card queue-section" id="queueSection" style="display:none">
+      <div class="queue-header">
+        <h2 class="section-title">
+          <span class="section-icon">📥</span>
+          Download Queue
+        </h2>
+        <div class="queue-actions">
+          <button class="btn btn-ghost btn-sm" onclick="clearCompleted()">🧹 Clear Completed</button>
+          <button class="btn btn-ghost btn-sm" onclick="openFolder()">🗂️ Open Folder</button>
+        </div>
+      </div>
+      <div class="queue-list" id="queueList"></div>
+    </section>
+
+  </main>
+
+  <!-- Toast container -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- Loading overlay -->
+  <div id="loadingOverlay" class="loading-overlay" style="display:none">
+    <div class="loading-card">
+      <div class="spinner"></div>
+      <p id="loadingText">Fetching playlist...</p>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
