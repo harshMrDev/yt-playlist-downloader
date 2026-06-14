@@ -591,3 +591,90 @@ body {
 @media (max-width: 480px) {
   .video-grid { grid-template-columns: 1fr; }
 }
+
+/* ── Folder Input & Quick Locations ── */
+.folder-input-wrap {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.folder-input-icon {
+  position: absolute;
+  left: 12px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+#folderPath {
+  width: 100%;
+  padding: 10px 14px 10px 36px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: 'Inter', sans-serif;
+  outline: none;
+  transition: border-color var(--transition);
+}
+#folderPath:focus {
+  border-color: var(--purple);
+}
+
+.quick-locations {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.quick-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-right: 4px;
+}
+.quick-loc-btn {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--glass-border);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.quick-loc-btn:hover {
+  background: var(--glass-hover);
+  color: var(--text-primary);
+  border-color: var(--purple);
+}
+
+/* ── Cookies Selector ── */
+.cookies-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+.cookies-select {
+  width: 100%;
+  padding: 10px 14px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: 'Inter', sans-serif;
+  outline: none;
+  cursor: pointer;
+  transition: border-color var(--transition);
+}
+.cookies-select:focus {
+  border-color: var(--purple);
+}
+.cookies-select option {
+  background: var(--bg-mid);
+  color: var(--text-primary);
+}
+

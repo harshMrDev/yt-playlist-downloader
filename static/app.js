@@ -19,10 +19,10 @@ window.addEventListener("DOMContentLoaded", async () => {
     const r = await fetch("/api/default-dir");
     const d = await r.json();
     downloadFolder = d.dir;
-    document.getElementById("folderPath").textContent = downloadFolder;
+    document.getElementById("folderPath").value = downloadFolder;
   } catch (e) {
     downloadFolder = "";
-    document.getElementById("folderPath").textContent = "~/Downloads";
+    document.getElementById("folderPath").value = "";
   }
 
   // Check ffmpeg availability
@@ -263,7 +263,7 @@ async function browseFolder() {
     const d = await r.json();
     if (d.folder) {
       downloadFolder = d.folder;
-      document.getElementById("folderPath").textContent = downloadFolder;
+      document.getElementById("folderPath").value = downloadFolder;
     }
   } catch (e) {
     showToast("Could not open folder picker", "error");
@@ -271,20 +271,39 @@ async function browseFolder() {
 }
 
 async function openFolder() {
+  const currentPath = document.getElementById("folderPath").value.trim();
   try {
     await fetch("/api/open-folder", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ folder: downloadFolder })
+      body: JSON.stringify({ folder: currentPath })
     });
   } catch (e) {
     showToast("Could not open folder", "error");
   }
 }
 
+async function setQuickFolder(type) {
+  try {
+    const r = await fetch(`/api/quick-dir?type=${type}`);
+    const d = await r.json();
+    if (d.dir) {
+      downloadFolder = d.dir;
+      document.getElementById("folderPath").value = downloadFolder;
+      showToast(`📁 Output set to ${type}`, "success");
+    }
+  } catch (e) {
+    showToast("Failed to set output directory", "error");
+  }
+}
+
 // ── Download ─────────────────────────────────────────────────
 async function startDownload() {
   if (selectedIds.size === 0) return;
+
+  const currentPath = document.getElementById("folderPath").value.trim();
+  const cookiesSource = document.getElementById("cookiesSourceSelect").value;
+  downloadFolder = currentPath;
 
   const selected = allVideos.filter(v => selectedIds.has(v.id));
 
@@ -319,7 +338,8 @@ async function startDownload() {
           videos: batch,
           quality: currentQuality,
           format: currentFormat,
-          output_dir: downloadFolder,
+          output_dir: currentPath,
+          cookies_source: cookiesSource,
         })
       });
     } catch (e) {

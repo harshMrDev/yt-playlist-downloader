@@ -157,9 +157,7 @@ def get_format_string(quality, fmt):
     'ffmpeg not installed' error — these top out around 720p on YouTube.
     """
     if fmt == "mp3":
-        # bestaudio works without ffmpeg for formats already in aac/opus/m4a;
-        # mp3 conversion needs ffmpeg — fall back to best audio as-is
-        return "bestaudio/best"
+        return "bestaudio"
 
     if HAS_FFMPEG:
         # Full quality — separate video+audio merged by ffmpeg
@@ -240,7 +238,7 @@ def try_get_cookies():
     return None
 
 
-def download_video_worker(video_id, url, quality, fmt, output_dir):
+def download_video_worker(video_id, url, quality, fmt, output_dir, cookies_source="none"):
     """Worker function to download a single video.
     
     Tries multiple player clients to beat 403 Forbidden errors from YouTube.
@@ -249,6 +247,7 @@ def download_video_worker(video_id, url, quality, fmt, output_dir):
     import yt_dlp
 
     format_str = get_format_string(quality, fmt)
+    print(f"[Worker] Thread started: video_id={video_id}, url={url}, quality={quality}, format={fmt}, cookies={cookies_source}, dir={output_dir}")
 
     # Player clients to try in order — tv_embedded is most reliable for bypassing 403
     PLAYER_CLIENTS = ["tv_embedded", "android", "web", "mweb"]
@@ -270,8 +269,10 @@ def download_video_worker(video_id, url, quality, fmt, output_dir):
             if mp3_postprocessors:
                 opts["postprocessors"] = mp3_postprocessors
 
-            # On last attempt, also try loading browser cookies
-            if i == len(PLAYER_CLIENTS) - 1:
+            # Apply user-selected cookies, or fallback to auto-detected cookies on last try
+            if cookies_source and cookies_source != "none":
+                opts["cookiesfrombrowser"] = (cookies_source,)
+            elif i == len(PLAYER_CLIENTS) - 1:
                 cookies = try_get_cookies()
                 if cookies:
                     opts["cookiesfrombrowser"] = cookies
@@ -400,6 +401,9 @@ def start_download():
     quality = data.get("quality", "best")
     fmt = data.get("format", "mp4")
     output_dir = data.get("output_dir", DEFAULT_DOWNLOAD_DIR)
+    cookies_source = data.get("cookies_source", "none")
+
+    print(f"[API] Start download: count={len(videos)}, quality={quality}, format={fmt}, cookies={cookies_source}, output_dir={output_dir}")
 
     # Create output dir if not exists
     os.makedirs(output_dir, exist_ok=True)
@@ -420,7 +424,7 @@ def start_download():
 
         t = threading.Thread(
             target=download_video_worker,
-            args=(video_id, url, quality, fmt, output_dir),
+            args=(video_id, url, quality, fmt, output_dir, cookies_source),
             daemon=True
         )
         t.start()
@@ -490,21 +494,54 @@ def open_folder():
 
 @app.route("/api/browse-folder", methods=["GET"])
 def browse_folder():
-    """Open a folder picker dialog (Windows) and return selected path."""
+    """Open a folder picker dialog (Windows) using a subprocess to avoid tkinter thread crashes, and return selected path."""
     try:
         if sys.platform == "win32":
-            import tkinter as tk
-            from tkinter import filedialog
-            root = tk.Tk()
-            root.withdraw()
-            root.wm_attributes("-topmost", 1)
-            folder = filedialog.askdirectory(initialdir=DEFAULT_DOWNLOAD_DIR)
-            root.destroy()
-            if folder:
+            # Run tkinter dialog in a separate python process so it doesn't block or crash Flask's thread
+            code = (
+                "import tkinter as tk; "
+                "from tkinter import filedialog; "
+                "root = tk.Tk(); "
+                "root.withdraw(); "
+                "root.wm_attributes('-topmost', 1); "
+                f"folder = filedialog.askdirectory(initialdir={repr(DEFAULT_DOWNLOAD_DIR)}); "
+                "print(folder); "
+                "root.destroy()"
+            )
+            res = subprocess.run(
+                [sys.executable, "-c", code],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            folder = res.stdout.strip()
+            if folder and os.path.isdir(folder):
                 return jsonify({"folder": folder})
         return jsonify({"folder": DEFAULT_DOWNLOAD_DIR})
     except Exception as e:
+        print(f"Error browsing folder: {e}")
         return jsonify({"folder": DEFAULT_DOWNLOAD_DIR, "error": str(e)})
+
+
+@app.route("/api/quick-dir")
+def get_quick_dir():
+    """Resolve and return standard Windows directories for quick selection."""
+    folder_type = request.args.get("type", "Downloads")
+    home = Path.home()
+    if folder_type == "Desktop":
+        path = home / "Desktop"
+    elif folder_type == "Music":
+        path = home / "Music"
+    elif folder_type == "Videos":
+        path = home / "Videos"
+    else:
+        path = home / "Downloads"
+    
+    # Fallback to home if folder doesn't exist
+    if not path.exists():
+        path = home
+    
+    return jsonify({"dir": str(path)})
 
 
 @app.route("/api/cancel", methods=["POST"])

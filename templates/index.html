@@ -127,14 +127,15 @@
         </div>
 
         <!-- Output Folder -->
+        <!-- Output Folder -->
         <div class="setting-group full-width">
           <label class="setting-label">Download Folder</label>
           <div class="folder-row">
-            <div class="folder-display" id="folderDisplay">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <div class="folder-input-wrap">
+              <svg class="folder-input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none">
                 <path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
               </svg>
-              <span id="folderPath">Loading...</span>
+              <input type="text" id="folderPath" placeholder="C:\Users\...\Downloads" spellcheck="false" autocomplete="off" />
             </div>
             <button class="btn btn-secondary btn-sm" onclick="browseFolder()">
               📂 Browse
@@ -142,6 +143,29 @@
             <button class="btn btn-ghost btn-sm" onclick="openFolder()" title="Open folder in Explorer">
               🗂️ Open
             </button>
+          </div>
+          <!-- Quick select locations -->
+          <div class="quick-locations">
+            <span class="quick-label">Quick Select:</span>
+            <button type="button" class="quick-loc-btn" onclick="setQuickFolder('Downloads')">Downloads</button>
+            <button type="button" class="quick-loc-btn" onclick="setQuickFolder('Desktop')">Desktop</button>
+            <button type="button" class="quick-loc-btn" onclick="setQuickFolder('Music')">Music</button>
+            <button type="button" class="quick-loc-btn" onclick="setQuickFolder('Videos')">Videos</button>
+          </div>
+        </div>
+
+        <!-- Cookies Selector -->
+        <div class="setting-group full-width">
+          <label class="setting-label">Bypass Bot Detection (Import Cookies)</label>
+          <div class="cookies-row">
+            <select id="cookiesSourceSelect" class="cookies-select">
+              <option value="none">None (Fastest - No Cookies)</option>
+              <option value="chrome">Chrome Browser</option>
+              <option value="edge">Edge Browser</option>
+              <option value="firefox">Firefox Browser</option>
+              <option value="brave">Brave Browser</option>
+            </select>
+            <span class="setting-hint">Select your browser to share active login cookies if YouTube blocks your downloads.</span>
           </div>
         </div>
 
