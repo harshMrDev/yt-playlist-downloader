@@ -182,8 +182,8 @@ def get_format_string(quality, fmt):
     return quality_map.get(quality, quality_map["best"])
 
 
-def get_base_ydl_opts(video_id, output_dir, format_str, player_client="tv_embedded"):
-    """Build base yt-dlp options with anti-403 headers and player client spoofing."""
+def get_base_ydl_opts(video_id, output_dir, format_str):
+    """Build base yt-dlp options with anti-403 headers."""
     opts = {
         "format": format_str,
         "outtmpl": os.path.join(output_dir, "%(title)s.%(ext)s"),
@@ -192,14 +192,6 @@ def get_base_ydl_opts(video_id, output_dir, format_str, player_client="tv_embedd
         "no_warnings": True,
         "noplaylist": True,
         "ignoreerrors": False,
-        # --- Anti-403 settings ---
-        # Use a specific player client that YouTube hasn't blocked
-        "extractor_args": {
-            "youtube": {
-                "player_client": [player_client],
-                "player_skip": ["webpage", "configs"],
-            }
-        },
         # Mimic a real browser
         "http_headers": {
             "User-Agent": (
@@ -243,18 +235,11 @@ def try_get_cookies():
 
 
 def download_video_worker(video_id, url, quality, fmt, output_dir, cookies_source="none"):
-    """Worker function to download a single video.
-    
-    Tries multiple player clients to beat 403 Forbidden errors from YouTube.
-    Order: tv_embedded → android → web → mweb (last resort with cookies).
-    """
+    """Worker function to download a single video with fallback for locked cookie databases."""
     import yt_dlp
 
     format_str = get_format_string(quality, fmt)
     print(f"[Worker] Thread started: video_id={video_id}, url={url}, quality={quality}, format={fmt}, cookies={cookies_source}, dir={output_dir}")
-
-    # Player clients to try in order — tv_embedded is most reliable for bypassing 403
-    PLAYER_CLIENTS = ["tv_embedded", "android", "web", "mweb"]
 
     mp3_postprocessors = [{
         "key": "FFmpegExtractAudio",
@@ -262,55 +247,64 @@ def download_video_worker(video_id, url, quality, fmt, output_dir, cookies_sourc
         "preferredquality": "192",
     }] if (fmt == "mp3" and HAS_FFMPEG) else []
 
-    last_error = None
+    opts = get_base_ydl_opts(video_id, output_dir, format_str)
+    
+    if HAS_FFMPEG and fmt != "mp3":
+        opts["merge_output_format"] = "mp4"
+    if mp3_postprocessors:
+        opts["postprocessors"] = mp3_postprocessors
 
-    for i, client in enumerate(PLAYER_CLIENTS):
-        try:
-            opts = get_base_ydl_opts(video_id, output_dir, format_str, player_client=client)
+    # Try applying cookies if specified
+    if cookies_source and cookies_source != "none":
+        opts["cookiesfrombrowser"] = (cookies_source,)
 
-            if HAS_FFMPEG and fmt != "mp3":
-                opts["merge_output_format"] = "mp4"
-            if mp3_postprocessors:
-                opts["postprocessors"] = mp3_postprocessors
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            ydl.download([url])
+        
+        # Success
+        with download_lock:
+            if video_id in download_progress:
+                download_progress[video_id]["status"] = "done"
+        broadcast_event("progress", {"video_id": video_id, "status": "done", "percent": 100})
+        return
 
-            # Apply user-selected cookies, or fallback to auto-detected cookies on last try
-            if cookies_source and cookies_source != "none":
-                opts["cookiesfrombrowser"] = (cookies_source,)
-            elif i == len(PLAYER_CLIENTS) - 1:
-                cookies = try_get_cookies()
-                if cookies:
-                    opts["cookiesfrombrowser"] = cookies
-
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                ydl.download([url])
-
-            # Success
-            with download_lock:
-                if video_id in download_progress:
-                    download_progress[video_id]["status"] = "done"
-            broadcast_event("progress", {"video_id": video_id, "status": "done", "percent": 100})
-            return  # done — exit retry loop
-
-        except Exception as e:
-            last_error = str(e)
-            err_lower = last_error.lower()
-            # Only retry on access-denied type errors
-            if any(kw in err_lower for kw in ("403", "forbidden", "http error 4", "sign in", "not available")):
-                continue
-            # Any other error (network down, etc.) — stop immediately
-            break
-
-    # All attempts failed
-    print(f"[Worker] Download failed for {video_id}. Error: {last_error}")
-    with download_lock:
-        if video_id in download_progress:
-            download_progress[video_id]["status"] = "error"
-            download_progress[video_id]["error"] = last_error or "Unknown error"
-    broadcast_event("progress", {
-        "video_id": video_id,
-        "status": "error",
-        "error": last_error or "Unknown error",
-    })
+    except Exception as e:
+        err_msg = str(e)
+        err_lower = err_msg.lower()
+        
+        # Check if the failure is due to browser cookie database locks (OS locking file while browser is open)
+        is_cookie_lock = any(kw in err_lower for kw in ("could not copy chrome cookie database", "permission denied", "permissionerror", "sharing violation"))
+        
+        if is_cookie_lock and cookies_source and cookies_source != "none":
+            print(f"[Worker] Cookie database locked (browser is open). Retrying WITHOUT cookies for video {video_id}...")
+            try:
+                # Remove cookies option and retry download
+                opts_retry = opts.copy()
+                opts_retry.pop("cookiesfrombrowser", None)
+                with yt_dlp.YoutubeDL(opts_retry) as ydl:
+                    ydl.download([url])
+                
+                # Success on retry
+                with download_lock:
+                    if video_id in download_progress:
+                        download_progress[video_id]["status"] = "done"
+                broadcast_event("progress", {"video_id": video_id, "status": "done", "percent": 100})
+                return
+            except Exception as retry_e:
+                err_msg = f"Cookie database locked (please close Brave/Chrome or select None). Retry error: {retry_e}"
+        
+        # Permanent failure
+        print(f"[Worker] Download failed for {video_id}. Error: {err_msg}")
+        with download_lock:
+            if video_id in download_progress:
+                download_progress[video_id]["status"] = "error"
+                download_progress[video_id]["error"] = err_msg
+        broadcast_event("progress", {
+            "video_id": video_id,
+            "status": "error",
+            "error": err_msg,
+        })
 
 
 @app.route("/")
